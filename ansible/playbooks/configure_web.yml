@@ -1,0 +1,35 @@
+---
+# Targets the nginx containers created by Terraform (inventory/terraform_web.ini).
+# nginx:alpine has no Python, so the raw module is used.
+- name: Configure Terraform-provisioned web servers
+  hosts: web
+  gather_facts: false
+
+  tasks:
+    - name: Hide nginx version (security hardening)
+      ansible.builtin.raw: echo 'server_tokens off;' > /etc/nginx/conf.d/security.conf
+      changed_when: true
+
+    - name: Publish a health endpoint
+      ansible.builtin.raw: >-
+        echo '{"status":"healthy","server":"{{ inventory_hostname }}","configured_by":"ansible"}'
+        > /usr/share/nginx/html/health.json
+      changed_when: true
+
+    - name: Validate and reload nginx
+      ansible.builtin.raw: nginx -t && nginx -s reload
+      changed_when: true
+
+    - name: Check each web server responds
+      ansible.builtin.uri:
+        url: "http://localhost:{{ web_port }}/health.json"
+        return_content: true
+      register: web_health
+      delegate_to: localhost
+      retries: 5
+      delay: 2
+      until: web_health.status == 200
+
+    - name: Show health response
+      ansible.builtin.debug:
+        msg: "{{ web_health.json }}"

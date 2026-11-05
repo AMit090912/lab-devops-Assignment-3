@@ -1,0 +1,10 @@
+---
+# Full configuration run: ansible-playbook site.yml
+- name: Configure lab host and deploy the app
+  ansible.builtin.import_playbook: playbooks/setup_host.yml
+
+- name: Configure Terraform-provisioned web servers
+  ansible.builtin.import_playbook: playbooks/configure_web.yml
+
+- name: Verify every service is healthy
+  ansible.builtin.import_playbook: playbooks/verify.yml

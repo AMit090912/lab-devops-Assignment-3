@@ -1,0 +1,63 @@
+groups:
+  - name: lab3-app-alerts
+    rules:
+      - alert: AppDown
+        expr: up{job="lab3-app"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Lab3 app is down"
+          description: "Prometheus could not scrape {{ $labels.instance }} for more than 1 minute."
+
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(app_http_requests_total{job="lab3-app",status=~"5.."}[2m]))
+            /
+          sum(rate(app_http_requests_total{job="lab3-app"}[2m])) > 0.05
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High HTTP 5xx error rate"
+          description: "More than 5% of requests are failing (current value {{ $value | humanizePercentage }})."
+
+      - alert: HighLatencyP95
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(app_http_request_duration_seconds_bucket{job="lab3-app"}[2m])) by (le)) > 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 latency above 1 second"
+          description: "95th percentile latency is {{ $value | humanizeDuration }}."
+
+      - alert: MaintenanceModeEnabled
+        expr: app_feature_flag_enabled{flag="maintenance_mode"} == 1
+        for: 0m
+        labels:
+          severity: info
+        annotations:
+          summary: "Maintenance mode kill switch is ON"
+          description: "Write operations are disabled by the maintenance_mode feature flag."
+
+  - name: lab3-host-alerts
+    rules:
+      - alert: HostHighCpu
+        expr: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[2m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host CPU usage above 80%"
+          description: "CPU usage is {{ $value | printf \"%.1f\" }}%."
+
+      - alert: HostLowMemory
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host available memory below 10%"
+          description: "Only {{ $value | humanizePercentage }} memory is available."

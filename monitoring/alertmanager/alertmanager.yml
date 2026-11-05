@@ -1,0 +1,19 @@
+# Alertmanager forwards alerts to the app webhook, which logs them as JSON.
+# Result: every alert is visible in Prometheus, Alertmanager UI AND Kibana.
+route:
+  receiver: app-webhook
+  group_by: ["alertname"]
+  group_wait: 10s
+  group_interval: 1m
+  repeat_interval: 1h
+
+receivers:
+  - name: app-webhook
+    webhook_configs:
+      - url: http://localhost:5000/api/alerts
+        send_resolved: true
+
+inhibit_rules:
+  - source_matchers: ['severity="critical"']
+    target_matchers: ['severity="warning"']
+    equal: ["alertname"]

@@ -1,0 +1,49 @@
+---
+# Toggle a feature flag through configuration management (the app hot-reloads the file).
+# Usage: ansible-playbook playbooks/toggle_flag.yml -e flag=maintenance_mode -e enabled=true
+- name: Toggle a feature flag
+  hosts: lab
+  gather_facts: false
+
+  tasks:
+    - name: Validate input
+      ansible.builtin.assert:
+        that:
+          - flag is defined
+          - enabled is defined
+        fail_msg: "Pass -e flag=<name> -e enabled=<true|false>"
+
+    - name: Read current flags
+      ansible.builtin.slurp:
+        src: "{{ app_dir }}/config/flags.json"
+      register: flags_raw
+
+    - name: Parse flags
+      ansible.builtin.set_fact:
+        current_flags: "{{ (flags_raw.content | b64decode | from_json).flags }}"
+
+    - name: Ensure the flag exists
+      ansible.builtin.assert:
+        that: flag in current_flags
+        fail_msg: "Unknown flag '{{ flag }}'. Known: {{ current_flags.keys() | list }}"
+
+    - name: Write updated flags
+      ansible.builtin.copy:
+        content: >-
+          {{ {'flags': current_flags | combine({flag: current_flags[flag] | combine({'enabled': enabled | bool})})}
+             | to_nice_json(indent=2) }}
+        dest: "{{ app_dir }}/config/flags.json"
+        mode: "0644"
+
+    - name: Confirm the app sees the change
+      ansible.builtin.uri:
+        url: "http://localhost:{{ app_port }}/api/flags"
+        return_content: true
+      register: api_flags
+      retries: 5
+      delay: 2
+      until: api_flags.json[flag].enabled == (enabled | bool)
+
+    - name: Result
+      ansible.builtin.debug:
+        msg: "{{ flag }} is now {{ 'ON' if (enabled | bool) else 'OFF' }}"

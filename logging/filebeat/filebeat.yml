@@ -1,0 +1,13 @@
+# Filebeat ships the app's JSON log file to Logstash.
+# Set LAB3_LOG_DIR to the repo's logs folder before starting Filebeat.
+filebeat.inputs:
+  - type: filestream
+    id: lab3-app-logs
+    paths:
+      - ${LAB3_LOG_DIR}/*.log
+    fields:
+      app: lab3-app
+    fields_under_root: true
+
+output.logstash:
+  hosts: ["localhost:5044"]

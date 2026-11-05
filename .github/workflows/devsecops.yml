@@ -1,0 +1,92 @@
+# DevSecOps pipeline - Lab 3 (Amit, 2301010471)
+# Stage 1: security scanning (SAST, dependencies, secrets, IaC)  -> blocks the pipeline on findings
+# Stage 2: automated browser testing (Selenium) + load testing (k6)
+name: DevSecOps Pipeline
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  security-scan:
+    name: Security scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install scanners
+        run: pip install bandit==1.7.10 pip-audit==2.7.3 ansible-core==2.17.5
+
+      - name: SAST - Bandit (fails on medium/high issues)
+        run: bandit -r app -ll
+
+      - name: Dependency scan - pip-audit (known CVEs)
+        run: pip-audit -r app/requirements.txt -r selenium/requirements.txt
+
+      - name: Secret scan - Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Filesystem + IaC misconfiguration scan - Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform fmt & validate
+        working-directory: terraform
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false
+          terraform validate
+
+      - name: Ansible syntax check
+        working-directory: ansible
+        run: |
+          ansible-galaxy collection install -r requirements.yml
+          ansible-playbook site.yml --syntax-check
+
+  browser-and-load-tests:
+    name: Selenium + k6 load test
+    runs-on: ubuntu-latest
+    needs: security-scan
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r app/requirements.txt -r selenium/requirements.txt
+
+      - name: Start the app
+        run: |
+          nohup python app/app.py > app.out 2>&1 &
+          for i in $(seq 1 30); do curl -fs http://localhost:5000/health && exit 0; sleep 1; done
+          cat app.out; exit 1
+
+      - name: Automated browser tests - Selenium (headless Chrome)
+        run: pytest selenium/test_ui.py -v
+
+      - uses: grafana/setup-k6-action@v1
+
+      - name: Load test - k6 (smoke profile, thresholds enforced)
+        run: k6 run -e PROFILE=smoke load-testing/k6-load-test.js

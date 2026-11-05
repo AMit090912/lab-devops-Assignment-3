@@ -1,0 +1,21 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Lab 3 demo application (Flask + waitress)
+After=network-online.target
+
+[Service]
+Type=simple
+User={{ ansible_user_id }}
+WorkingDirectory={{ app_dir }}
+Environment=APP_VERSION={{ app_version }}
+Environment=PORT={{ app_port }}
+Environment=FLAGS_FILE={{ app_dir }}/config/flags.json
+Environment=LOG_FILE={{ project_root }}/logs/app.log
+Environment=ADMIN_TOKEN={{ admin_token }}
+ExecStart={{ venv_dir }}/bin/python {{ app_dir }}/app.py
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

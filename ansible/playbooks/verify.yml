@@ -1,0 +1,30 @@
+---
+- name: Verify the app and observability stack are healthy
+  hosts: lab
+  gather_facts: false
+
+  tasks:
+    - name: Wait for each service to report healthy
+      ansible.builtin.uri:
+        url: "{{ item.url }}"
+        status_code: 200
+      register: health
+      retries: 30
+      delay: 10
+      until: health.status == 200
+      loop: "{{ health_checks }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Check Prometheus is scraping the app
+      ansible.builtin.uri:
+        url: "http://localhost:9090/api/v1/query?query=up%7Bjob%3D%22lab3-app%22%7D"
+        return_content: true
+      register: prom_up
+      retries: 10
+      delay: 6
+      until: prom_up.json.data.result | length > 0 and prom_up.json.data.result[0].value[1] == "1"
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg: "All {{ health_checks | length }} services are healthy and Prometheus reports the app as UP."

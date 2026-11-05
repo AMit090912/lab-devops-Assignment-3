@@ -1,0 +1,78 @@
+---
+- name: Configure lab host and deploy the application
+  hosts: lab
+  gather_facts: true
+
+  tasks:
+    - name: Ensure the host is Linux
+      ansible.builtin.assert:
+        that: ansible_system == "Linux"
+        fail_msg: "Run Ansible from Linux or WSL2."
+
+    - name: Install base packages
+      become: true
+      ansible.builtin.apt:
+        name:
+          - python3
+          - python3-venv
+          - python3-pip
+          - curl
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Set vm.max_map_count required by Elasticsearch
+      become: true
+      ansible.posix.sysctl:
+        name: vm.max_map_count
+        value: "262144"
+        state: present
+        sysctl_set: true
+
+    - name: Create Python virtual environment and install app dependencies
+      ansible.builtin.pip:
+        requirements: "{{ app_dir }}/requirements.txt"
+        virtualenv: "{{ venv_dir }}"
+        virtualenv_command: python3 -m venv
+
+    - name: Create logs directory (shipped by Filebeat)
+      ansible.builtin.file:
+        path: "{{ project_root }}/logs"
+        state: directory
+        mode: "0755"
+
+    - name: Render feature flag configuration
+      ansible.builtin.copy:
+        content: "{{ {'flags': feature_flags} | to_nice_json(indent=2) }}\n"
+        dest: "{{ app_dir }}/config/flags.json"
+        mode: "0644"
+
+    - name: Install systemd unit for the app
+      become: true
+      ansible.builtin.template:
+        src: ../templates/lab3-app.service.j2
+        dest: /etc/systemd/system/lab3-app.service
+        mode: "0644"
+      notify: Restart lab3-app
+
+    - name: Enable and start the app service
+      become: true
+      ansible.builtin.systemd_service:
+        name: lab3-app
+        state: started
+        enabled: true
+        daemon_reload: true
+
+    - name: Wait for the app port
+      ansible.builtin.wait_for:
+        port: "{{ app_port }}"
+        timeout: 60
+
+  handlers:
+    - name: Restart lab3-app
+      become: true
+      ansible.builtin.systemd_service:
+        name: lab3-app
+        state: restarted
+        daemon_reload: true

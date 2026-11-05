@@ -1,0 +1,33 @@
+---
+# Repository root (inventory lives in <repo>/ansible/inventory)
+project_root: "{{ (inventory_dir + '/../..') | realpath }}"
+app_dir: "{{ project_root }}/app"
+venv_dir: "{{ project_root }}/.venv"
+app_port: 5000
+app_version: "1.0.0"
+
+# Leave empty to disable the runtime flag-toggle API. Supply with -e admin_token=... (never commit it).
+admin_token: "{{ lookup('ansible.builtin.env', 'LAB3_ADMIN_TOKEN') }}"
+
+# Feature flags rendered into app/config/flags.json (configuration as code)
+feature_flags:
+  new_ui_banner:
+    enabled: true
+    rollout_percentage: 100
+    description: Shows the new announcement banner on the home page
+  discount_banner:
+    enabled: true
+    rollout_percentage: 50
+    description: "Canary rollout: shows a discount banner to 50% of users"
+  maintenance_mode:
+    enabled: false
+    rollout_percentage: 100
+    description: "Kill switch: when enabled all write operations return HTTP 503"
+
+health_checks:
+  - { name: App, url: "http://localhost:5000/health" }
+  - { name: Prometheus, url: "http://localhost:9090/-/ready" }
+  - { name: Alertmanager, url: "http://localhost:9093/-/ready" }
+  - { name: Grafana, url: "http://localhost:3000/api/health" }
+  - { name: Elasticsearch, url: "http://localhost:9200/_cluster/health" }
+  - { name: Kibana, url: "http://localhost:5601/api/status" }

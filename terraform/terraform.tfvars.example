@@ -1,0 +1,8 @@
+# Copy to terraform.tfvars and adjust.
+# On Windows (Docker Desktop) use the named pipe instead:
+# docker_host = "npipe:////./pipe/docker_engine"
+docker_host      = "unix:///var/run/docker.sock"
+project          = "lab3"
+environment      = "dev"
+web_server_count = 2
+web_base_port    = 8081

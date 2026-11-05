@@ -1,0 +1,19 @@
+{
+  "flags": {
+    "new_ui_banner": {
+      "enabled": true,
+      "rollout_percentage": 100,
+      "description": "Shows the new announcement banner on the home page"
+    },
+    "discount_banner": {
+      "enabled": true,
+      "rollout_percentage": 50,
+      "description": "Canary rollout: shows a discount banner to 50% of users"
+    },
+    "maintenance_mode": {
+      "enabled": false,
+      "rollout_percentage": 100,
+      "description": "Kill switch: when enabled all write operations return HTTP 503"
+    }
+  }
+}
